@@ -1,201 +1,52 @@
-## Attention-based Extraction of Structured Information from Street View Imagery
+# Number Plate Detection using Attention OCR
 
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/attention-based-extraction-of-structured/optical-character-recognition-on-fsns-test)](https://paperswithcode.com/sota/optical-character-recognition-on-fsns-test?p=attention-based-extraction-of-structured)
-[![Paper](http://img.shields.io/badge/paper-arXiv.1704.03549-B3181B.svg)](https://arxiv.org/abs/1704.03549)
-[![TensorFlow 1.15](https://img.shields.io/badge/tensorflow-1.15-brightgreen)](https://github.com/tensorflow/tensorflow/releases/tag/v1.15.0)
+## Problem
 
-*A TensorFlow model for real-world image text extraction problems.*
+I have used tensorflow attention-ocr to predict the text present on number plates. The refrence tutorial article which I followed can be found [here](https://nanonets.com/blog/attention-ocr-for-text-recogntion/)
 
-This folder contains the code needed to train a new Attention OCR model on the
-[FSNS dataset][FSNS] dataset to transcribe street names in France. You can
-also use it to train it on your own data.
+## Usage
 
-More details can be found in our paper:
+Please make sure you have the latest versions of tensorflow, opencv and pandas installed. 
 
-["Attention-based Extraction of Structured Information from Street View
-Imagery"](https://arxiv.org/abs/1704.03549)
+## Getting training data
+We have [images of number plates](https://medusa.fit.vutbr.cz/traffic/download/513/) which are 652 images of cropped license plates with a csv containing annotation.
 
-## Contacts
 
-Authors
+We have resize all the images to (650, 250, 3)
 
-* Zbigniew Wojna (zbigniewwojna@gmail.com)
-* Alexander Gorban (gorban@google.com)
+## Generate tfrecords
+Having stored our cropped images of equal sizes in a different directory, we can begin using those images to generate tfrecords that we will use to train our dataset. Here's a script to generate tfrecords. Note the max_width and max_height variables so we can specify the size of our crops to our tfrecord generation script. These tfrecords along with the label mapping have to be stored in the tensorflow object detection API inside the following directory -
 
-Maintainer: Xavier Gibert [@xavigibert](https://github.com/xavigibert)
+The dataset has to be in the FSNS dataset format. For this, your test and train tfrecords along with the charset labels text file are placed inside a folder named 'fsns' inside the 'datasets' directory. you can change this to another folder and upload your tfrecord files and charset-labels.txt here. You'll have to change the path in multiple places accordingly. You can find the charset-labels.txt file for this project [here](https://github.com/codeaway23/models/blob/master/research/attention_ocr/python/datasets/data/number_plates/charset-labels.txt)
 
-## Requirements
+tfrecord generation script present in ```get_tf_records.py```
 
-1. Install the TensorFlow library ([instructions][TF]). For example:
+## Setting our Attention-OCR up
+Once we have our tfrecords and charset labels stored in the required directory, we need to write a dataset config script that will help us split our data into train and test for the attention OCR training script to process.
 
+Make a python file and name it ```number_plates.py``` and place it inside the following directory: ```models/research/attention_ocr/python/datasets```
+The contents of the number-plates.py can be seen [here](https://github.com/codeaway23/models/blob/master/research/attention_ocr/python/datasets/number_plates.py). 
+
+## Training the model
+Move into the following directory: ```models/research/attention_ocr```
+Open the file named ```common_flags.py``` and specify where you'd want to log your training.
+
+then run
+```bash
+python train.py --dataset_name=number_plates --max_number_of_steps=6000
 ```
-python3 -m venv ~/.tensorflow
-source ~/.tensorflow/bin/activate
-pip install --upgrade pip
-pip install --upgrade tensorflow-gpu=1.15
-```
+## Evaluating the model
+Run the following command from terminal.
 
-2. At least 158GB of free disk space to download the FSNS dataset:
-
-```
-cd research/attention_ocr/python/datasets
-aria2c -c -j 20 -i ../../../street/python/fsns_urls.txt
-cd ..
-```
-
-3. 16GB of RAM or more; 32GB is recommended.
-4. `train.py` works with both CPU and GPU, though using GPU is preferable. It has been tested with a Titan X and with a GTX980.
-
-[TF]: https://www.tensorflow.org/install/
-[FSNS]: https://github.com/tensorflow/models/tree/master/research/street
-
-## How to use this code
-
-To run all unit tests:
-
-```
-cd research/attention_ocr/python
-find . -name "*_test.py" -printf '%P\n' | xargs python3 -m unittest
+```bash
+python eval.py --dataset_name='number_plates'
 ```
 
-To train from scratch:
+## Get predictions
+From ```models/research/attention_ocr/python``` run the following command on your shell.
 
+```bash
+python demo_inference.py --dataset_name=number_plates \n 
+--batch_size=8 --checkpoint=models/research/attention_ocr/number_plates_model_logs/model.ckpt-6000 \n
+--image_path_pattern=/home/anuj/crops/%d.png
 ```
-python train.py
-```
-
-To train a model using pre-trained Inception weights as initialization:
-
-```
-wget http://download.tensorflow.org/models/inception_v3_2016_08_28.tar.gz
-tar xf inception_v3_2016_08_28.tar.gz
-python train.py --checkpoint_inception=./inception_v3.ckpt
-```
-
-To fine tune the Attention OCR model using a checkpoint:
-
-```
-wget http://download.tensorflow.org/models/attention_ocr_2017_08_09.tar.gz
-tar xf attention_ocr_2017_08_09.tar.gz
-python train.py --checkpoint=model.ckpt-399731
-```
-
-## How to use your own image data to train the model
-
-You need to define a new dataset. There are two options:
-
-1. Store data in the same format as the FSNS dataset and just reuse the
-[python/datasets/fsns.py](https://github.com/tensorflow/models/blob/master/research/attention_ocr/python/datasets/fsns.py)
-module. E.g., create a file datasets/newtextdataset.py:
-```
-import fsns
-
-DEFAULT_DATASET_DIR = 'path/to/the/dataset'
-
-DEFAULT_CONFIG = {
-    'name':
-        'MYDATASET',
-    'splits': {
-        'train': {
-            'size': 123,
-            'pattern': 'tfexample_train*'
-        },
-        'test': {
-            'size': 123,
-            'pattern': 'tfexample_test*'
-        }
-    },
-    'charset_filename':
-        'charset_size.txt',
-    'image_shape': (150, 600, 3),
-    'num_of_views':
-        4,
-    'max_sequence_length':
-        37,
-    'null_code':
-        42,
-    'items_to_descriptions': {
-        'image':
-            'A [150 x 600 x 3] color image.',
-        'label':
-            'Characters codes.',
-        'text':
-            'A unicode string.',
-        'length':
-            'A length of the encoded text.',
-        'num_of_views':
-            'A number of different views stored within the image.'
-    }
-}
-
-
-def get_split(split_name, dataset_dir=None, config=None):
-  if not dataset_dir:
-    dataset_dir = DEFAULT_DATASET_DIR
-  if not config:
-    config = DEFAULT_CONFIG
-
-  return fsns.get_split(split_name, dataset_dir, config)
-```
-You will also need to include it into the `datasets/__init__.py` and specify the
-dataset name in the command line.
-
-```
-python train.py --dataset_name=newtextdataset
-```
-
-Please note that eval.py will also require the same flag.
-
-To learn how to store a data in the FSNS
- format please refer to the https://stackoverflow.com/a/44461910/743658.
-
-2. Define a new dataset format. The model needs the following data to train:
-
-- images: input images,  shape [batch_size x H x W x 3];
-- labels: ground truth label ids,  shape=[batch_size x seq_length];
-- labels_one_hot: labels in one-hot encoding,  shape [batch_size x seq_length x num_char_classes];
-
-Refer to [python/data_provider.py](https://github.com/tensorflow/models/blob/master/research/attention_ocr/python/data_provider.py#L33)
-for more details. You can use [python/datasets/fsns.py](https://github.com/tensorflow/models/blob/master/research/attention_ocr/python/datasets/fsns.py)
-as the example.
-
-## How to use a pre-trained model
-
-The inference part was not released yet, but it is pretty straightforward to
-implement one in Python or C++.
-
-The recommended way is to use the [Serving infrastructure][serving].
-
-Alternatively you can:
-1. define a placeholder for images (or use directly an numpy array)
-2. [create a graph ](https://github.com/tensorflow/models/blob/master/research/attention_ocr/python/eval.py#L60)
-```
-endpoints = model.create_base(images_placeholder, labels_one_hot=None)
-```
-3. [load a pretrained model](https://github.com/tensorflow/models/blob/master/research/attention_ocr/python/model.py#L494)
-4. run computations through the graph:
-```
-predictions = sess.run(endpoints.predicted_chars,
-                       feed_dict={images_placeholder:images_actual_data})
-```
-5. Convert character IDs (predictions) to UTF8 using the provided charset file.
-
-Please note that tensor names may change overtime and old stored checkpoints can
-become unloadable. In many cases such backward incompatible changes can be
-fixed with a [string substitution][1] to update the checkpoint itself or using a
-custom var_list with [assign_from_checkpoint_fn][2]. For anything
-other than a one time experiment please use the [TensorFlow Serving][serving].
-
-[1]: https://github.com/tensorflow/tensorflow/blob/aaf7adc/tensorflow/contrib/rnn/python/tools/checkpoint_convert.py
-[2]: https://www.tensorflow.org/api_docs/python/tf/contrib/framework/assign_from_checkpoint_fn
-[serving]: https://tensorflow.github.io/serving/serving_basic
-
-## Disclaimer
-
-This code is a modified version of the internal model we used for our paper.
-Currently it reaches 83.79% full sequence accuracy after 400k steps of training.
-The main difference between this version and the version used in the paper - for
-the paper we used a distributed training with 50 GPU (K80) workers (asynchronous
-updates), the provided checkpoint was created using this code after ~6 days of
-training on a single GPU (Titan X) (it reached 81% after 24 hours of training),
-the coordinate encoding is disabled by default.
